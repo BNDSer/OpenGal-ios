@@ -48,12 +48,20 @@ struct SidebarView: View {
         }
     }
 
+    private func modeColor(_ mode: ConversationMode) -> Color {
+        switch mode {
+        case .gal:      return .pink
+        case .default_: return .blue
+        case .unset:    return .secondary
+        }
+    }
+
     private func conversationRow(_ conv: Conversation) -> some View {
         let isActive = conv.id == store.activeId
         return Button(action: { haptic(); onSelect(conv.id) }) {
             HStack {
-                Image(systemName: "bubble.left")
-                    .foregroundStyle(.secondary)
+                Image(systemName: "bubble.left.fill")
+                    .foregroundStyle(modeColor(conv.mode))
                     .font(.system(size: 14))
                 VStack(alignment: .leading, spacing: 1) {
                     Text(conv.title)

@@ -48,31 +48,9 @@ struct ChatMessage: Identifiable, Equatable, Codable {
 }
 
 enum ConversationMode: String, Codable {
-    case unset      // not yet chosen — shows mode picker
-    case gal        // Gal mode: system prompt + TTS
-    case default_   // Default mode: plain chat, no TTS
-
-    // Codable uses rawValue "default_"; store as "default" on disk
-    enum CodingKeys: String, CodingKey { case rawValue }
-    func encode(to encoder: Encoder) throws {
-        var c = encoder.singleValueContainer()
-        try c.encode(rawValue)
-    }
-    init(from decoder: Decoder) throws {
-        let v = try decoder.singleValueContainer().decode(String.self)
-        switch v {
-        case "gal":     self = .gal
-        case "default": self = .default_
-        default:        self = .unset
-        }
-    }
-    var encoded: String {
-        switch self {
-        case .gal:      return "gal"
-        case .default_: return "default"
-        case .unset:    return "unset"
-        }
-    }
+    case unset    = "unset"
+    case gal      = "gal"
+    case default_ = "default"   // stored as "default" on disk
 }
 
 struct Conversation: Identifiable, Codable {

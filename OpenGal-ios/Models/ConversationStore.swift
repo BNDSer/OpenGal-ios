@@ -143,6 +143,12 @@ final class ConversationStore: ObservableObject {
         conversations.flatMap { $0.messages }.filter { $0.isFavorited }
     }
 
+    var allFavoritesWithMode: [(ChatMessage, ConversationMode)] {
+        conversations.flatMap { conv in
+            conv.messages.filter { $0.isFavorited }.map { ($0, conv.mode) }
+        }
+    }
+
     // MARK: - Persistence
 
     private func sortByRecent() {
