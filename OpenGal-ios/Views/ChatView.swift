@@ -257,7 +257,6 @@ struct ChatView: View {
                 LazyVStack(spacing: 0) {
                     if store.active?.mode == .unset && viewModel.messages.isEmpty {
                         ModePickerView { mode in store.setMode(mode) }
-                            .padding(.top, 60)
                             .id("modePicker")
                     }
                     ForEach(viewModel.messages) { msg in
@@ -281,7 +280,6 @@ struct ChatView: View {
                 .onTapGesture { dismissKeyboard() }
             }
             .scrollDismissesKeyboard(.interactively)
-            .defaultScrollAnchor(.bottom)
             .onChange(of: viewModel.messages.count) { _, _ in
                 if let last = viewModel.messages.last {
                     withAnimation(.easeOut(duration: 0.2)) {
