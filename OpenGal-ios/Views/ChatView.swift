@@ -255,7 +255,7 @@ struct ChatView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 0) {
-                    if store.active?.mode == .unset || store.active?.mode == nil {
+                    if store.active?.mode == .unset && viewModel.messages.isEmpty {
                         ModePickerView { mode in store.setMode(mode) }
                             .padding(.top, 60)
                             .id("modePicker")
@@ -274,17 +274,28 @@ struct ChatView: View {
                         .padding(.vertical, 6)
                     }
                     if viewModel.isLoading { loadingIndicator }
-                    Color.clear.frame(height: inputBarHeight + 8).id("bottom")
+                    // Spacer so last message isn't hidden behind input bar
+                    Color.clear.frame(height: inputBarHeight + 8)
                 }
                 .padding(.top, 8)
                 .onTapGesture { dismissKeyboard() }
             }
             .scrollDismissesKeyboard(.interactively)
+            .defaultScrollAnchor(.bottom)
             .onChange(of: viewModel.messages.count) { _, _ in
-                withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
+                if let last = viewModel.messages.last {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        proxy.scrollTo(last.id, anchor: .bottom)
+                    }
+                }
             }
-            .onChange(of: viewModel.isLoading) { _, _ in
-                withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
+            .onChange(of: store.activeId) { _, _ in
+                // Scroll to last user message when switching conversations
+                let target = viewModel.messages.last(where: { $0.role == .user })?.id
+                    ?? viewModel.messages.last?.id
+                if let id = target {
+                    proxy.scrollTo(id, anchor: .top)
+                }
             }
         }
     }

@@ -92,6 +92,26 @@ struct Conversation: Identifiable, Codable {
         self.updatedAt = updatedAt
         self.messages = messages
     }
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, mode, createdAt, updatedAt, messages
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        title = try c.decode(String.self, forKey: .title)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        updatedAt = try c.decode(Date.self, forKey: .updatedAt)
+        messages = try c.decode([ChatMessage].self, forKey: .messages)
+        // mode may be absent in conversations saved before this field was added
+        if let m = try c.decodeIfPresent(ConversationMode.self, forKey: .mode) {
+            mode = m
+        } else {
+            // Old conversation with messages → treat as default mode, not unset
+            mode = messages.isEmpty ? .unset : .default_
+        }
+    }
 }
 
 // MARK: - API wire types

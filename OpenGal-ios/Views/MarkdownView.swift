@@ -6,12 +6,13 @@ import WebKit
 /// No CDN dependency for markdown — only KaTeX is loaded from CDN.
 struct MarkdownView: View {
     let text: String
-    @State private var height: CGFloat = 60
+    @State private var height: CGFloat = 28
 
     var body: some View {
         MarkdownWebView(text: text, height: $height)
             .frame(height: height)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .animation(.easeOut(duration: 0.1), value: height)
     }
 }
 
@@ -62,6 +63,9 @@ private struct MarkdownWebView: UIViewRepresentable {
         code{font-family:ui-monospace,monospace;font-size:.9em;
              background:rgba(128,128,128,.15);padding:1px 4px;border-radius:4px}
         .katex-display{margin:.5em 0;overflow-x:auto}
+        p{margin:0;padding:0}
+        p+p{margin-top:0.4em}
+        br{display:block;content:'';margin:0}
         </style>
         </head>
         <body id="b">\(body)</body>
@@ -77,10 +81,9 @@ private struct MarkdownWebView: UIViewRepresentable {
           report();
         }
         function report(){
-          var h=document.getElementById('b').getBoundingClientRect().height;
-          window.webkit.messageHandlers.h.postMessage(Math.ceil(h)+10);
+          var h=document.getElementById('b').scrollHeight;
+          window.webkit.messageHandlers.h.postMessage(h);
         }
-        // fallback if CDN slow
         setTimeout(report,2000);
         </script>
         </html>
