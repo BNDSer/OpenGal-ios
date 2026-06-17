@@ -212,7 +212,7 @@ struct ChatView: View {
                         Color.clear
                             .frame(width: 36, height: 36)
                             .glassEffect(.regular, in: Circle())
-                        Button(action: { scrollToBottomTrigger.toggle() }) {
+                        Button(action: { haptic(); scrollToBottomTrigger.toggle() }) {
                             Image(systemName: "chevron.down")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundStyle(.primary)
@@ -249,10 +249,15 @@ struct ChatView: View {
 
     // MARK: - Toolbar
 
+    private func haptic() {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
             Button(action: {
+                haptic()
                 dismissKeyboard()
                 withAnimation(.spring(duration: 0.3)) { showSidebar.toggle() }
             }) {
@@ -265,10 +270,10 @@ struct ChatView: View {
                     Image(systemName: "stop.circle.fill").foregroundStyle(.red)
                 }
             }
-            Button(action: { showSettings = true }) {
+            Button(action: { haptic(); showSettings = true }) {
                 Image(systemName: "gear")
             }
-            Button(action: { store.newConversation() }) {
+            Button(action: { haptic(); store.newConversation() }) {
                 Image(systemName: "square.and.pencil")
             }
         }

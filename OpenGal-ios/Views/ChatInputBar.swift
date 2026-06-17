@@ -52,7 +52,7 @@ struct ChatInputBar: View {
 
                 // Buttons sit above glass layer
                 HStack(alignment: .center, spacing: 0) {
-                    Button(action: onAttach) {
+                    Button(action: { UIImpactFeedbackGenerator(style: .light).impactOccurred(); onAttach() }) {
                         Image(systemName: "plus")
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(.primary)
@@ -63,7 +63,10 @@ struct ChatInputBar: View {
 
                     Spacer()
 
-                    Button(action: isLoading ? onCancel : onSend) {
+                    Button(action: {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        if isLoading { onCancel() } else { onSend() }
+                    }) {
                         ZStack {
                             Circle()
                                 .fill(isLoading ? Color.black : (canSend ? Color.black : Color(.systemGray4)))

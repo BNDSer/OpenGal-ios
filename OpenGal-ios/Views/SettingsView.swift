@@ -141,8 +141,11 @@ struct SettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("完成") { dismiss() }
-                    .fontWeight(.semibold)
+                Button("完成") {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    dismiss()
+                }
+                .fontWeight(.semibold)
             }
         }
     }

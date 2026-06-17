@@ -6,9 +6,10 @@ struct SidebarView: View {
     var onNewChat: () -> Void
     var onSelect: (UUID) -> Void
 
+    private func haptic() { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+
     var body: some View {
         VStack(spacing: 0) {
-            // Header
             HStack {
                 Text("OpenGal")
                     .font(.title3.bold())
@@ -20,9 +21,9 @@ struct SidebarView: View {
 
             List {
                 Section {
-                    sidebarRow(icon: "plus.bubble", label: "新建对话", action: onNewChat)
+                    sidebarRow(icon: "plus.bubble", label: "新建对话") { haptic(); onNewChat() }
                     sidebarRow(icon: "star.fill", label: "收藏夹", iconColor: .yellow) {
-                        showFavorites = true
+                        haptic(); showFavorites = true
                     }
                 }
 
@@ -31,6 +32,7 @@ struct SidebarView: View {
                         conversationRow(conv)
                     }
                     .onDelete { offsets in
+                        haptic()
                         offsets.map { store.conversations[$0].id }.forEach { store.delete($0) }
                     }
                 }
@@ -48,7 +50,7 @@ struct SidebarView: View {
 
     private func conversationRow(_ conv: Conversation) -> some View {
         let isActive = conv.id == store.activeId
-        return Button(action: { onSelect(conv.id) }) {
+        return Button(action: { haptic(); onSelect(conv.id) }) {
             HStack {
                 Image(systemName: "bubble.left")
                     .foregroundStyle(.secondary)

@@ -36,7 +36,7 @@ struct ModePickerView: View {
 
     private func modeCard(icon: String, title: String, description: String,
                           color: Color, mode: ConversationMode) -> some View {
-        Button(action: { onSelect(mode) }) {
+        Button(action: { UIImpactFeedbackGenerator(style: .light).impactOccurred(); onSelect(mode) }) {
             VStack(spacing: 14) {
                 ZStack {
                     Circle()
