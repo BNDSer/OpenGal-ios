@@ -132,12 +132,17 @@ private struct MarkdownWebView: UIViewRepresentable {
                     while i < lines.count && lines[i].trimmingCharacters(in: .whitespaces).hasPrefix("|") {
                         rows.append(tableRow(lines[i].trimmingCharacters(in: .whitespaces))); i += 1
                     }
-                    var tbl = "<table style='width:100%;border-collapse:collapse'>"
-                    tbl += "<tr>" + headers.map { "<th style='border:1px solid #ccc;padding:4px 8px;text-align:left;background:rgba(128,128,128,.12)'>\(inline($0))</th>" }.joined() + "</tr>"
+                    let cellStyle = "border:1px solid #ccc;padding:6px 10px;white-space:nowrap"
+                    var tbl = "<div style='overflow-x:auto'><table style='border-collapse:collapse'>"
+                    tbl += "<tr>" + headers.map {
+                        "<th style='\(cellStyle);text-align:left;background:rgba(128,128,128,.12)'>\(inline($0))</th>"
+                    }.joined() + "</tr>"
                     for row in rows {
-                        tbl += "<tr>" + row.map { "<td style='border:1px solid #ccc;padding:4px 8px'>\(inline($0))</td>" }.joined() + "</tr>"
+                        tbl += "<tr>" + row.map {
+                            "<td style='\(cellStyle)'>\(inline($0))</td>"
+                        }.joined() + "</tr>"
                     }
-                    tbl += "</table>"
+                    tbl += "</table></div>"
                     out.append(tbl); continue
                 }
             }
@@ -175,7 +180,24 @@ private struct MarkdownWebView: UIViewRepresentable {
         var s = line
         if s.hasPrefix("|") { s = String(s.dropFirst()) }
         if s.hasSuffix("|") { s = String(s.dropLast()) }
-        return s.components(separatedBy: "|").map { $0.trimmingCharacters(in: .whitespaces) }
+        // Split by | but not inside $...$
+        var cells: [String] = []
+        var current = ""
+        var inMath = false
+        var idx = s.startIndex
+        while idx < s.endIndex {
+            let ch = s[idx]
+            if ch == "$" { inMath.toggle() }
+            if ch == "|" && !inMath {
+                cells.append(current.trimmingCharacters(in: .whitespaces))
+                current = ""
+            } else {
+                current.append(ch)
+            }
+            idx = s.index(after: idx)
+        }
+        cells.append(current.trimmingCharacters(in: .whitespaces))
+        return cells
     }
 
     // MARK: - Coordinator
