@@ -76,22 +76,24 @@ struct MessageBubble: View {
             MarkdownView(text: message.content)
                 .textSelection(.enabled)
 
-            // Action row
-            HStack(spacing: 16) {
-                if showPlayButton {
+            // Action row — hidden while streaming
+            if !message.isStreaming {
+                HStack(spacing: 16) {
+                    if showPlayButton {
+                        actionButton(
+                            icon: isPlaying ? "stop.fill" : "speaker.wave.2",
+                            color: isPlaying ? .red : .secondary,
+                            action: onPlay
+                        )
+                    }
                     actionButton(
-                        icon: isPlaying ? "stop.fill" : "speaker.wave.2",
-                        color: isPlaying ? .red : .secondary,
-                        action: onPlay
+                        icon: message.isFavorited ? "star.fill" : "star",
+                        color: message.isFavorited ? .yellow : .secondary,
+                        action: onFavorite
                     )
                 }
-                actionButton(
-                    icon: message.isFavorited ? "star.fill" : "star",
-                    color: message.isFavorited ? .yellow : .secondary,
-                    action: onFavorite
-                )
+                .padding(.top, 2)
             }
-            .padding(.top, 2)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 4)

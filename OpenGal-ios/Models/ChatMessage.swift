@@ -32,11 +32,12 @@ struct ChatMessage: Identifiable, Equatable, Codable {
     var timestamp: Date
     var isFavorited: Bool
     var savedAudioFilename: String?
+    var isStreaming: Bool
 
     init(id: UUID = UUID(), role: MessageRole, content: String,
          attachments: [MessageAttachment] = [],
          timestamp: Date = Date(), isFavorited: Bool = false,
-         savedAudioFilename: String? = nil) {
+         savedAudioFilename: String? = nil, isStreaming: Bool = false) {
         self.id = id
         self.role = role
         self.content = content
@@ -44,6 +45,23 @@ struct ChatMessage: Identifiable, Equatable, Codable {
         self.timestamp = timestamp
         self.isFavorited = isFavorited
         self.savedAudioFilename = savedAudioFilename
+        self.isStreaming = isStreaming
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, role, content, attachments, timestamp, isFavorited, savedAudioFilename, isStreaming
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        role = try c.decode(MessageRole.self, forKey: .role)
+        content = try c.decode(String.self, forKey: .content)
+        attachments = (try? c.decode([MessageAttachment].self, forKey: .attachments)) ?? []
+        timestamp = try c.decode(Date.self, forKey: .timestamp)
+        isFavorited = (try? c.decode(Bool.self, forKey: .isFavorited)) ?? false
+        savedAudioFilename = try? c.decode(String.self, forKey: .savedAudioFilename)
+        isStreaming = (try? c.decode(Bool.self, forKey: .isStreaming)) ?? false
     }
 }
 
@@ -196,9 +214,10 @@ struct ChatRequest: Codable {
     let system: String?
     let messages: [APIMessage]
     let thinking: ThinkingConfig?
+    let stream: Bool
 
     enum CodingKeys: String, CodingKey {
-        case model, max_tokens, system, messages, thinking
+        case model, max_tokens, system, messages, thinking, stream
     }
 
     func encode(to encoder: Encoder) throws {
@@ -208,6 +227,7 @@ struct ChatRequest: Codable {
         try c.encodeIfPresent(system, forKey: .system)
         try c.encode(messages, forKey: .messages)
         try c.encodeIfPresent(thinking, forKey: .thinking)
+        try c.encode(stream, forKey: .stream)
     }
 }
 

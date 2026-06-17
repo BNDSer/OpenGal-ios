@@ -34,9 +34,11 @@ final class AnthropicService: Sendable {
     static let shared = AnthropicService()
     private init() {}
 
-    func sendMessage(
+    /// Stream a response, calling `onDelta` for each text chunk, returning full text when done.
+    func streamMessage(
         messages: [ChatMessage],
-        config: AnthropicConfig
+        config: AnthropicConfig,
+        onDelta: @escaping @Sendable (String) -> Void
     ) async throws -> String {
         guard !config.baseURL.isEmpty, !config.apiKey.isEmpty else {
             throw AnthropicError.missingCredentials
@@ -50,36 +52,20 @@ final class AnthropicService: Sendable {
             throw AnthropicError.invalidURL
         }
 
-        let historyMessages = messages.suffix(config.maxHistoryMessages)
-        let apiMessages: [APIMessage] = historyMessages.map { msg in
-            if msg.attachments.isEmpty {
-                return APIMessage(role: msg.role.rawValue, text: msg.content)
-            }
-            // Build multimodal content blocks
-            var blocks: [APIContentBlock] = []
-            for att in msg.attachments {
-                if att.isImage {
-                    blocks.append(.image(mediaType: att.mimeType, data: att.base64Data))
-                } else if att.isPDF {
-                    blocks.append(.document(mediaType: att.mimeType, data: att.base64Data))
-                }
-            }
-            if !msg.content.isEmpty {
-                blocks.append(.text(msg.content))
-            }
-            return APIMessage(role: msg.role.rawValue, blocks: blocks)
-        }
+        let apiMessages = buildAPIMessages(messages: messages, config: config)
 
         let thinkingConfig: ThinkingConfig? = config.thinkingEnabled
             ? ThinkingConfig(type: "enabled", budget_tokens: config.thinkingBudget)
             : nil
 
+        // stream: true added to request body
         let body = ChatRequest(
             model: config.model.isEmpty ? "claude-sonnet-4-6" : config.model,
             max_tokens: config.maxTokens,
             system: config.systemPrompt.isEmpty ? nil : config.systemPrompt,
             messages: apiMessages,
-            thinking: thinkingConfig
+            thinking: thinkingConfig,
+            stream: true
         )
 
         var request = URLRequest(url: url)
@@ -87,7 +73,6 @@ final class AnthropicService: Sendable {
         request.setValue(config.apiKey, forHTTPHeaderField: "x-api-key")
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        // Extended thinking requires the beta header
         if config.thinkingEnabled {
             request.setValue("interleaved-thinking-2025-05-14", forHTTPHeaderField: "anthropic-beta")
         }
@@ -98,28 +83,82 @@ final class AnthropicService: Sendable {
         sessionConfig.connectionProxyDictionary = [:]
         let session = URLSession(configuration: sessionConfig)
 
-        let (data, response): (Data, URLResponse)
+        let (stream, response): (URLSession.AsyncBytes, URLResponse)
         do {
-            (data, response) = try await session.data(for: request)
+            (stream, response) = try await session.bytes(for: request)
         } catch {
             throw AnthropicError.networkError(error)
         }
 
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            let bodyStr = String(data: data, encoding: .utf8) ?? "(no body)"
-            throw AnthropicError.httpError(http.statusCode, bodyStr)
+            // Read error body
+            var errorBody = ""
+            for try await line in stream.lines {
+                errorBody += line
+                if errorBody.count > 500 { break }
+            }
+            throw AnthropicError.httpError(http.statusCode, errorBody)
         }
 
-        let parsed: ChatResponse
-        do {
-            parsed = try JSONDecoder().decode(ChatResponse.self, from: data)
-        } catch {
-            throw AnthropicError.decodingError(error)
+        var fullText = ""
+        var firstChunk = true
+
+        for try await line in stream.lines {
+            try Task.checkCancellation()
+
+            // SSE format: "data: {...}" or "data: [DONE]"
+            guard line.hasPrefix("data: ") else { continue }
+            let jsonStr = String(line.dropFirst(6))
+            guard jsonStr != "[DONE]" else { break }
+            guard let data = jsonStr.data(using: .utf8) else { continue }
+
+            // Parse the SSE event
+            if let event = try? JSONDecoder().decode(SSEEvent.self, from: data) {
+                if event.type == "content_block_delta",
+                   let delta = event.delta,
+                   delta.type == "text_delta",
+                   let text = delta.text,
+                   !text.isEmpty {
+                    if firstChunk {
+                        firstChunk = false
+                    }
+                    fullText += text
+                    onDelta(text)
+                }
+            }
         }
 
-        return parsed.content
-            .filter { $0.type == "text" }
-            .compactMap { $0.text }
-            .joined()
+        return fullText
     }
+
+    private func buildAPIMessages(messages: [ChatMessage], config: AnthropicConfig) -> [APIMessage] {
+        let historyMessages = messages.suffix(config.maxHistoryMessages)
+        return historyMessages.map { msg in
+            if msg.attachments.isEmpty {
+                return APIMessage(role: msg.role.rawValue, text: msg.content)
+            }
+            var blocks: [APIContentBlock] = []
+            for att in msg.attachments {
+                if att.isImage {
+                    blocks.append(.image(mediaType: att.mimeType, data: att.base64Data))
+                } else if att.isPDF {
+                    blocks.append(.document(mediaType: att.mimeType, data: att.base64Data))
+                }
+            }
+            if !msg.content.isEmpty { blocks.append(.text(msg.content)) }
+            return APIMessage(role: msg.role.rawValue, blocks: blocks)
+        }
+    }
+}
+
+// MARK: - SSE event types
+
+private struct SSEEvent: Decodable {
+    let type: String
+    let delta: SSEDelta?
+}
+
+private struct SSEDelta: Decodable {
+    let type: String
+    let text: String?
 }

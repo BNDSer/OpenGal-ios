@@ -66,7 +66,32 @@ final class ConversationStore: ObservableObject {
         guard let idx = conversations.firstIndex(where: { $0.id == activeId }) else { return }
         conversations[idx].messages.append(msg)
         conversations[idx].updatedAt = Date()
+        if !msg.isStreaming { sortByRecent(); save() }
+    }
+
+    // Append a streaming text chunk to an in-progress assistant message
+    func appendStreamingChunk(_ chunk: String, to messageId: UUID) {
+        guard let ci = conversations.firstIndex(where: { $0.id == activeId }),
+              let mi = conversations[ci].messages.firstIndex(where: { $0.id == messageId }) else { return }
+        conversations[ci].messages[mi].content += chunk
+        objectWillChange.send()
+    }
+
+    // Mark streaming done, persist
+    func finalizeStreamingMessage(id messageId: UUID, content: String) {
+        guard let ci = conversations.firstIndex(where: { $0.id == activeId }),
+              let mi = conversations[ci].messages.firstIndex(where: { $0.id == messageId }) else { return }
+        conversations[ci].messages[mi].content = content
+        conversations[ci].messages[mi].isStreaming = false
+        conversations[ci].updatedAt = Date()
         sortByRecent()
+        save()
+    }
+
+    // Remove a message (used to clean up placeholder on error/cancel)
+    func removeMessage(id messageId: UUID) {
+        guard let ci = conversations.firstIndex(where: { $0.id == activeId }) else { return }
+        conversations[ci].messages.removeAll { $0.id == messageId }
         save()
     }
 
@@ -74,9 +99,12 @@ final class ConversationStore: ObservableObject {
     // Called when a request is cancelled so the unanswered question goes back to the input box.
     func removeLastUserMessageIfUnanswered() {
         guard let idx = conversations.firstIndex(where: { $0.id == activeId }) else { return }
-        let msgs = conversations[idx].messages
-        guard let last = msgs.last, last.role == .user else { return }
-        conversations[idx].messages.removeLast()
+        var msgs = conversations[idx].messages
+        // Remove trailing streaming assistant placeholder if present
+        if msgs.last?.isStreaming == true { msgs.removeLast() }
+        // Remove trailing user message
+        if msgs.last?.role == .user { msgs.removeLast() }
+        conversations[idx].messages = msgs
         conversations[idx].updatedAt = Date()
         save()
     }
@@ -165,8 +193,19 @@ final class ConversationStore: ObservableObject {
     }
 
     private func load() {
-        guard let data = try? Data(contentsOf: saveURL),
-              let decoded = try? JSONDecoder().decode([Conversation].self, from: data) else { return }
-        conversations = decoded.sorted { $0.updatedAt > $1.updatedAt }
+        guard let data = try? Data(contentsOf: saveURL) else { return }
+        // Try full decode first
+        if let decoded = try? JSONDecoder().decode([Conversation].self, from: data) {
+            conversations = decoded.sorted { $0.updatedAt > $1.updatedAt }
+            return
+        }
+        // Fallback: decode as raw JSON array and skip malformed entries
+        if let raw = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            let decoder = JSONDecoder()
+            conversations = raw.compactMap { dict in
+                guard let itemData = try? JSONSerialization.data(withJSONObject: dict) else { return nil }
+                return try? decoder.decode(Conversation.self, from: itemData)
+            }.sorted { $0.updatedAt > $1.updatedAt }
+        }
     }
 }

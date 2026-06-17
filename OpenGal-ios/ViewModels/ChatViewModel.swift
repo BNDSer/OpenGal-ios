@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import UIKit
 
 @MainActor
 final class ChatViewModel: ObservableObject {
@@ -46,10 +47,9 @@ final class ChatViewModel: ObservableObject {
         requestTask?.cancel()
         requestTask = nil
         isLoading = false
-        // Restore last user message to input box
+        // Find the last user message (the one that triggered this request)
         if let lastUser = store.active?.messages.last(where: { $0.role == .user }) {
             inputText = lastUser.content
-            // Remove the unanswered user message from history
             store.removeLastUserMessageIfUnanswered()
         }
     }
@@ -126,7 +126,6 @@ final class ChatViewModel: ObservableObject {
         let mode = store.active?.mode ?? .default_
         let isGal = mode == .gal
 
-        // Gal mode uses settings system prompt + TTS; Default mode uses neither
         let config = AnthropicConfig(
             baseURL: settings.baseURL,
             apiKey: settings.apiKey,
@@ -144,29 +143,49 @@ final class ChatViewModel: ObservableObject {
         )
         let conversationId = store.activeId
 
-        do {
-            let reply = try await AnthropicService.shared.sendMessage(
-                messages: messages,
-                config: config
-            )
-            let assistantMsg = ChatMessage(role: .assistant, content: reply)
-            store.appendMessage(assistantMsg)
+        // Insert a placeholder message for streaming
+        let assistantMsg = ChatMessage(role: .assistant, content: "", isStreaming: true)
+        store.appendMessage(assistantMsg)
+        let msgId = assistantMsg.id
 
-            // Generate title after the very first exchange (1 user + 1 assistant)
+        do {
+            var isFirstChunk = true
+            let reply = try await AnthropicService.shared.streamMessage(
+                messages: messages.filter { $0.id != msgId }, // exclude placeholder
+                config: config,
+                onDelta: { [weak self] chunk in
+                    guard let self else { return }
+                    Task { @MainActor in
+                        if isFirstChunk {
+                            isFirstChunk = false
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        }
+                        self.store.appendStreamingChunk(chunk, to: msgId)
+                    }
+                }
+            )
+
+            // Finalize
+            store.finalizeStreamingMessage(id: msgId, content: reply)
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+
+            // Generate title
             if let convId = conversationId,
                store.conversations.first(where: { $0.id == convId })?.title == "新对话",
-               messages.filter({ $0.role == .assistant }).count == 1 {
+               messages.filter({ $0.role == .assistant && !$0.isStreaming }).count == 1 {
                 Task { await generateTitle(for: convId, config: config) }
             }
 
             if ttsConfig.enabled {
                 Task {
                     guard let data = await ttsService.fetchAudio(text: reply, config: ttsConfig) else { return }
-                    pendingAudioData[assistantMsg.id] = data
-                    ttsService.play(data: data, messageId: assistantMsg.id, keepFile: false)
+                    pendingAudioData[msgId] = data
+                    ttsService.play(data: data, messageId: msgId, keepFile: false)
                 }
             }
         } catch {
+            // Remove placeholder on error/cancel
+            store.removeMessage(id: msgId)
             if isCancellation(error) { return }
             errorMessage = error.localizedDescription
         }
@@ -211,9 +230,10 @@ final class ChatViewModel: ObservableObject {
         )
         let titleMessages = [ChatMessage(role: .user, content: prompt)]
 
-        guard let title = try? await AnthropicService.shared.sendMessage(
+        guard let title = try? await AnthropicService.shared.streamMessage(
             messages: titleMessages,
-            config: titleConfig
+            config: titleConfig,
+            onDelta: { _ in }
         ) else { return }
 
         let cleaned = title

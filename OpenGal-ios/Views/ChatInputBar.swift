@@ -4,6 +4,7 @@ struct ChatInputBar: View {
     @Binding var text: String
     @Binding var attachments: [MessageAttachment]
     var isLoading: Bool
+    var isDisabled: Bool = false
     var onSend: () -> Void
     var onCancel: () -> Void
     var onAttach: () -> Void
@@ -11,7 +12,7 @@ struct ChatInputBar: View {
     @FocusState var focused: Bool
 
     private var canSend: Bool {
-        !isLoading && (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty)
+        !isLoading && !isDisabled && (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty)
     }
 
     var body: some View {
@@ -29,29 +30,37 @@ struct ChatInputBar: View {
 
             // Single pill: [+] [text field] [send]
             ZStack(alignment: .leading) {
-                // Glass pill background — does not intercept button taps when buttons are in ZStack above
-                HStack(alignment: .center, spacing: 0) {
+                // Glass pill background
+                HStack(alignment: .bottom, spacing: 0) {
                     Color.clear.frame(width: 44, height: 50)
-                    TextField("询问 OpenGal", text: $text, axis: .vertical)
+                    TextField(isDisabled ? "请先选择对话模式" : "询问 OpenGal", text: $text, axis: .vertical)
                         .focused($focused)
                         .lineLimit(1...6)
                         .font(.body)
                         .frame(maxWidth: .infinity)
+                        .padding(.vertical, 13)
+                        .disabled(isDisabled)
                         .simultaneousGesture(
-                            DragGesture(minimumDistance: 10).onChanged { v in
-                                if v.translation.height > 30 && focused { focused = false }
-                                else if v.translation.height < -30 && !focused { focused = true }
-                            }
+                            DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                                .onEnded { v in
+                                    if v.translation.height > 15 {
+                                        UIApplication.shared.sendAction(
+                                            #selector(UIResponder.resignFirstResponder),
+                                            to: nil, from: nil, for: nil)
+                                    } else if v.translation.height < -15 && !focused {
+                                        focused = true
+                                    }
+                                }
                         )
                         .onSubmit { if canSend { onSend() } }
                         .submitLabel(.send)
                     Color.clear.frame(width: 44, height: 50)
                 }
-                .frame(height: 50)
-                .glassEffect(.regular, in: Capsule())
+                .frame(minHeight: 50)
+                .glassEffect(.regular.interactive(), in: Capsule())
 
-                // Buttons sit above glass layer
-                HStack(alignment: .center, spacing: 0) {
+                // Buttons sit above glass layer — always pinned to bottom
+                HStack(alignment: .bottom, spacing: 0) {
                     Button(action: { UIImpactFeedbackGenerator(style: .light).impactOccurred(); onAttach() }) {
                         Image(systemName: "plus")
                             .font(.system(size: 16, weight: .semibold))
@@ -69,16 +78,16 @@ struct ChatInputBar: View {
                     }) {
                         ZStack {
                             Circle()
-                                .fill(isLoading ? Color.black : (canSend ? Color.black : Color(.systemGray4)))
+                                .fill(isLoading ? Color.primary : (canSend ? Color.primary : Color(.systemGray4)))
                                 .frame(width: 30, height: 30)
                             if isLoading {
                                 RoundedRectangle(cornerRadius: 3)
-                                    .fill(.white)
+                                    .fill(Color(.systemBackground))
                                     .frame(width: 11, height: 11)
                             } else {
                                 Image(systemName: "arrow.up")
                                     .font(.system(size: 13, weight: .bold))
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(Color(.systemBackground))
                             }
                         }
                         .frame(width: 44, height: 50)

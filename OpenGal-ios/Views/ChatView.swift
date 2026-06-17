@@ -6,6 +6,15 @@ struct ChatView: View {
     @StateObject private var viewModel = ChatViewModel()
     @ObservedObject private var store = ConversationStore.shared
     @ObservedObject private var tts = TTSService.shared
+    @ObservedObject private var settings = AppSettings.shared
+
+    private var preferredScheme: ColorScheme? {
+        switch settings.colorScheme {
+        case "light": return .light
+        case "dark":  return .dark
+        default:      return nil
+        }
+    }
 
     @State private var showSettings = false
     @State private var showSidebar = false
@@ -60,9 +69,9 @@ struct ChatView: View {
                             }
                         }
                 )
+                // Close attachment menu when tapping outside
                 .simultaneousGesture(
                     TapGesture().onEnded {
-                        dismissKeyboard()
                         if showAttachmentMenu {
                             withAnimation(.spring(duration: 0.25)) { showAttachmentMenu = false }
                         }
@@ -147,6 +156,7 @@ struct ChatView: View {
             Text(viewModel.errorMessage ?? "")
         })
         .onChange(of: store.activeId) { _, _ in viewModel.stopTTS() }
+        .preferredColorScheme(preferredScheme)
     }
 
     // MARK: - Attachment menu card
@@ -231,6 +241,7 @@ struct ChatView: View {
                 text: $viewModel.inputText,
                 attachments: $viewModel.pendingAttachments,
                 isLoading: viewModel.isLoading,
+                isDisabled: store.active?.mode == .unset,
                 onSend: viewModel.sendMessage,
                 onCancel: viewModel.cancelRequest,
                 onAttach: {
@@ -309,8 +320,9 @@ struct ChatView: View {
                     Color.clear.frame(height: inputBarHeight + 8)
                 }
                 .padding(.top, 8)
-                .onTapGesture { dismissKeyboard() }
             }
+            .contentShape(Rectangle())
+            .onTapGesture { dismissKeyboard() }
             .scrollDismissesKeyboard(.interactively)
             .onScrollGeometryChange(for: CGFloat.self) { geo in
                 geo.contentSize.height - geo.contentOffset.y - geo.containerSize.height

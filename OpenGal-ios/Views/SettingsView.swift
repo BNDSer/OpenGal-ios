@@ -14,6 +14,15 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            Section("外观") {
+                Picker("主题", selection: $settings.colorScheme) {
+                    Text("跟随系统").tag("system")
+                    Text("浅色").tag("light")
+                    Text("深色").tag("dark")
+                }
+                .pickerStyle(.segmented)
+            }
+
             Section("API 配置") {
                 LabeledContent("Base URL") {
                     TextField("https://...", text: $settings.baseURL)
@@ -30,8 +39,7 @@ struct SettingsView: View {
                 }
             }
 
-            Section("模型") {
-                LabeledContent("Model ID") {
+            Section("模型") {                LabeledContent("Model ID") {
                     TextField("claude-sonnet-4-6", text: $settings.model)
                         .multilineTextAlignment(.trailing)
                         .autocorrectionDisabled()
