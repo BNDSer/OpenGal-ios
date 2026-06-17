@@ -5,6 +5,7 @@ struct ChatInputBar: View {
     @Binding var attachments: [MessageAttachment]
     var isLoading: Bool
     var onSend: () -> Void
+    var onCancel: () -> Void
     var onAttach: () -> Void
 
     @FocusState var focused: Bool
@@ -62,10 +63,10 @@ struct ChatInputBar: View {
 
                     Spacer()
 
-                    Button(action: onSend) {
+                    Button(action: isLoading ? onCancel : onSend) {
                         ZStack {
                             Circle()
-                                .fill(canSend ? Color.black : Color(.systemGray4))
+                                .fill(isLoading ? Color.black : (canSend ? Color.black : Color(.systemGray4)))
                                 .frame(width: 30, height: 30)
                             if isLoading {
                                 RoundedRectangle(cornerRadius: 3)
@@ -81,8 +82,8 @@ struct ChatInputBar: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .disabled(!canSend)
-                    .animation(.spring(duration: 0.2), value: canSend)
+                    .disabled(!isLoading && !canSend)
+                    .animation(.spring(duration: 0.2), value: isLoading)
                 }
                 .frame(height: 50)
             }

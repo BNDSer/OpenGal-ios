@@ -32,6 +32,9 @@ final class AppSettings: ObservableObject {
     @Published var thinkingBudget: Int {
         didSet { defaults.set(thinkingBudget, forKey: "thinkingBudget") }
     }
+    @Published var timeoutSeconds: Int {
+        didSet { defaults.set(timeoutSeconds, forKey: "timeoutSeconds") }
+    }
     // TTS
     @Published var ttsBaseURL: String {
         didSet { defaults.set(ttsBaseURL, forKey: "ttsBaseURL") }
@@ -51,6 +54,7 @@ final class AppSettings: ObservableObject {
         maxTokens = defaults.object(forKey: "maxTokens") as? Int ?? 4096
         thinkingEnabled = defaults.object(forKey: "thinkingEnabled") as? Bool ?? false
         thinkingBudget = defaults.object(forKey: "thinkingBudget") as? Int ?? 8000
+        timeoutSeconds = defaults.object(forKey: "timeoutSeconds") as? Int ?? 120
         ttsBaseURL = defaults.string(forKey: "ttsBaseURL") ?? "http://100.75.53.37:9880"
         ttsEnabled = defaults.object(forKey: "ttsEnabled") as? Bool ?? false
     }

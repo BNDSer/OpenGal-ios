@@ -66,6 +66,18 @@ final class ConversationStore: ObservableObject {
         guard let idx = conversations.firstIndex(where: { $0.id == activeId }) else { return }
         conversations[idx].messages.append(msg)
         conversations[idx].updatedAt = Date()
+        sortByRecent()
+        save()
+    }
+
+    // Removes the last message if it is a user message with no assistant reply after it.
+    // Called when a request is cancelled so the unanswered question goes back to the input box.
+    func removeLastUserMessageIfUnanswered() {
+        guard let idx = conversations.firstIndex(where: { $0.id == activeId }) else { return }
+        let msgs = conversations[idx].messages
+        guard let last = msgs.last, last.role == .user else { return }
+        conversations[idx].messages.removeLast()
+        conversations[idx].updatedAt = Date()
         save()
     }
 
@@ -133,6 +145,10 @@ final class ConversationStore: ObservableObject {
 
     // MARK: - Persistence
 
+    private func sortByRecent() {
+        conversations.sort { $0.updatedAt > $1.updatedAt }
+    }
+
     private func save() {
         do {
             let data = try JSONEncoder().encode(conversations)
@@ -145,6 +161,6 @@ final class ConversationStore: ObservableObject {
     private func load() {
         guard let data = try? Data(contentsOf: saveURL),
               let decoded = try? JSONDecoder().decode([Conversation].self, from: data) else { return }
-        conversations = decoded
+        conversations = decoded.sorted { $0.updatedAt > $1.updatedAt }
     }
 }

@@ -25,6 +25,8 @@ final class ChatViewModel: ObservableObject {
         self.ttsService = ttsService
     }
 
+    private var requestTask: Task<Void, Never>?
+
     // MARK: - Send
 
     func sendMessage() {
@@ -36,7 +38,20 @@ final class ChatViewModel: ObservableObject {
         errorMessage = nil
         let userMsg = ChatMessage(role: .user, content: text, attachments: attachments)
         store.appendMessage(userMsg)
-        Task { await performRequest() }
+        requestTask = Task { await performRequest() }
+    }
+
+    func cancelRequest() {
+        guard isLoading else { return }
+        requestTask?.cancel()
+        requestTask = nil
+        isLoading = false
+        // Restore last user message to input box
+        if let lastUser = store.active?.messages.last(where: { $0.role == .user }) {
+            inputText = lastUser.content
+            // Remove the unanswered user message from history
+            store.removeLastUserMessageIfUnanswered()
+        }
     }
 
     func addAttachment(_ attachment: MessageAttachment) {
@@ -106,6 +121,8 @@ final class ChatViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
 
+        guard !Task.isCancelled else { return }
+
         let mode = store.active?.mode ?? .default_
         let isGal = mode == .gal
 
@@ -118,7 +135,8 @@ final class ChatViewModel: ObservableObject {
             maxHistoryMessages: settings.maxHistoryMessages,
             maxTokens: settings.maxTokens,
             thinkingEnabled: settings.thinkingEnabled,
-            thinkingBudget: settings.thinkingBudget
+            thinkingBudget: settings.thinkingBudget,
+            timeoutSeconds: settings.timeoutSeconds
         )
         let ttsConfig = TTSConfig(
             enabled: isGal && settings.ttsEnabled,
@@ -149,8 +167,22 @@ final class ChatViewModel: ObservableObject {
                 }
             }
         } catch {
+            if isCancellation(error) { return }
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if let u = error as? URLError, u.code == .cancelled { return true }
+        if case AnthropicError.networkError(let inner) = error {
+            if inner is CancellationError { return true }
+            if let u = inner as? URLError, u.code == .cancelled { return true }
+        }
+        // NSURLErrorCancelled = -999
+        let ns = error as NSError
+        if ns.domain == NSURLErrorDomain && ns.code == NSURLErrorCancelled { return true }
+        return false
     }
 
     private func generateTitle(for conversationId: UUID, config: AnthropicConfig) async {
@@ -174,7 +206,8 @@ final class ChatViewModel: ObservableObject {
             maxHistoryMessages: 2,
             maxTokens: 64,
             thinkingEnabled: false,
-            thinkingBudget: 0
+            thinkingBudget: 0,
+            timeoutSeconds: 30
         )
         let titleMessages = [ChatMessage(role: .user, content: prompt)]
 

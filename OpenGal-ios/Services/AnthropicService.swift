@@ -27,6 +27,7 @@ struct AnthropicConfig: Sendable {
     let maxTokens: Int
     let thinkingEnabled: Bool
     let thinkingBudget: Int
+    let timeoutSeconds: Int
 }
 
 final class AnthropicService: Sendable {
@@ -91,7 +92,7 @@ final class AnthropicService: Sendable {
             request.setValue("interleaved-thinking-2025-05-14", forHTTPHeaderField: "anthropic-beta")
         }
         request.httpBody = try JSONEncoder().encode(body)
-        request.timeoutInterval = 120
+        request.timeoutInterval = TimeInterval(config.timeoutSeconds)
 
         let sessionConfig = URLSessionConfiguration.ephemeral
         sessionConfig.connectionProxyDictionary = [:]

@@ -60,6 +60,11 @@ struct SettingsView: View {
                         in: 256...32000,
                         step: 256)
 
+                Stepper("超时时间：\(settings.timeoutSeconds) 秒",
+                        value: $settings.timeoutSeconds,
+                        in: 15...600,
+                        step: 15)
+
                 Toggle("Extended Thinking", isOn: Binding(
                     get: { settings.thinkingEnabled },
                     set: { enabled in

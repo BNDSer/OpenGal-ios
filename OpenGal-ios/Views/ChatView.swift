@@ -19,7 +19,8 @@ struct ChatView: View {
     @State private var showCamera = false
     @State private var photoPickerItems: [PhotosPickerItem] = []
 
-    @FocusState private var keyboardFocused: Bool
+    @State private var showScrollToBottom = false
+    @State private var scrollToBottomTrigger = false
 
     var body: some View {
         GeometryReader { geo in
@@ -202,15 +203,41 @@ struct ChatView: View {
     // MARK: - Input bar
 
     private var inputBarArea: some View {
-        ChatInputBar(
-            text: $viewModel.inputText,
-            attachments: $viewModel.pendingAttachments,
-            isLoading: viewModel.isLoading,
-            onSend: viewModel.sendMessage,
-            onAttach: {
-                withAnimation(.spring(duration: 0.25)) { showAttachmentMenu.toggle() }
+        VStack(spacing: 0) {
+            // Scroll-to-bottom button
+            if showScrollToBottom {
+                HStack {
+                    Spacer()
+                    ZStack {
+                        Color.clear
+                            .frame(width: 36, height: 36)
+                            .glassEffect(.regular, in: Circle())
+                        Button(action: { scrollToBottomTrigger.toggle() }) {
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(.primary)
+                                .frame(width: 36, height: 36)
+                                .contentShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    Spacer()
+                }
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+                .padding(.bottom, 4)
             }
-        )
+
+            ChatInputBar(
+                text: $viewModel.inputText,
+                attachments: $viewModel.pendingAttachments,
+                isLoading: viewModel.isLoading,
+                onSend: viewModel.sendMessage,
+                onCancel: viewModel.cancelRequest,
+                onAttach: {
+                    withAnimation(.spring(duration: 0.25)) { showAttachmentMenu.toggle() }
+                }
+            )
+        }
         .background(
             GeometryReader { geo in
                 Color.clear
@@ -280,6 +307,20 @@ struct ChatView: View {
                 .onTapGesture { dismissKeyboard() }
             }
             .scrollDismissesKeyboard(.interactively)
+            .onScrollGeometryChange(for: CGFloat.self) { geo in
+                geo.contentSize.height - geo.contentOffset.y - geo.containerSize.height
+            } action: { _, distanceFromBottom in
+                withAnimation(.easeOut(duration: 0.2)) {
+                    showScrollToBottom = distanceFromBottom > 120
+                }
+            }
+            .onChange(of: scrollToBottomTrigger) { _, _ in
+                if let last = viewModel.messages.last {
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        proxy.scrollTo(last.id, anchor: .bottom)
+                    }
+                }
+            }
             .onChange(of: viewModel.messages.count) { _, _ in
                 if let last = viewModel.messages.last {
                     withAnimation(.easeOut(duration: 0.2)) {
@@ -288,7 +329,6 @@ struct ChatView: View {
                 }
             }
             .onChange(of: store.activeId) { _, _ in
-                // Scroll to last user message when switching conversations
                 let target = viewModel.messages.last(where: { $0.role == .user })?.id
                     ?? viewModel.messages.last?.id
                 if let id = target {
