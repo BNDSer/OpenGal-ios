@@ -115,6 +115,7 @@ struct Conversation: Identifiable, Codable {
 struct TTSConfig: Sendable {
     let enabled: Bool
     let baseURL: String
+    let character: String
 }
 
 // Content block for multimodal messages

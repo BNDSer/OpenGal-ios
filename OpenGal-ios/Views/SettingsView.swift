@@ -4,9 +4,16 @@ struct SettingsView: View {
     @ObservedObject private var settings = AppSettings.shared
     @Environment(\.dismiss) private var dismiss
 
+    private var characterPromptBinding: Binding<String> {
+        switch settings.ttsCharacter {
+        case "megumi": return $settings.systemPromptMegumi
+        case "ling":   return $settings.systemPromptLing
+        default:       return $settings.systemPromptYanami
+        }
+    }
+
     // Common model presets
-    private let modelPresets = [
-        "claude-sonnet-4-6",
+    private let modelPresets = [        "claude-sonnet-4-6",
         "claude-opus-4-5",
         "claude-haiku-4-5-20251001",
         "claude-sonnet-4-5",
@@ -115,9 +122,10 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("System Prompt")
                         .font(.subheadline)
-                    TextEditor(text: $settings.systemPrompt)
+                    TextEditor(text: characterPromptBinding)
                         .frame(minHeight: 80)
                         .font(.body)
+                        .id(settings.ttsCharacter)  // force re-render on character switch
                 }
                 .padding(.vertical, 4)
             } header: {
@@ -137,7 +145,12 @@ struct SettingsView: View {
                             .textInputAutocapitalization(.never)
                             .keyboardType(.URL)
                     }
-                }
+                    Picker("角色", selection: $settings.ttsCharacter) {
+                        Text("八奈見").tag("yanami")
+                        Text("恵").tag("megumi")
+                        Text("玲").tag("ling")
+                    }
+                    .pickerStyle(.segmented)                }
             } header: {
                 Text("Gal Mode — 语音")
             } footer: {

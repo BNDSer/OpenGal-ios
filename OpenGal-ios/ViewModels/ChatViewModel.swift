@@ -79,7 +79,7 @@ final class ChatViewModel: ObservableObject {
 
     func playMessage(_ msg: ChatMessage) {
         guard msg.role == .assistant else { return }
-        let ttsConfig = TTSConfig(enabled: settings.ttsEnabled, baseURL: settings.ttsBaseURL)
+        let ttsConfig = TTSConfig(enabled: settings.ttsEnabled, baseURL: settings.ttsBaseURL, character: settings.ttsCharacter)
 
         if msg.isFavorited {
             // Saved file on disk
@@ -108,9 +108,15 @@ final class ChatViewModel: ObservableObject {
 
     func toggleFavorite(_ msg: ChatMessage) {
         if msg.isFavorited {
+            // Stop playback before unfavoriting to avoid deleting a file that's open
+            if ttsService.playingMessageId == msg.id { ttsService.stopCurrent() }
             store.unfavorite(messageId: msg.id)
         } else {
             let audioData = pendingAudioData[msg.id]
+            // If currently playing, update TTSService state first so it doesn't delete the file on finish
+            if ttsService.playingMessageId == msg.id, let data = audioData {
+                ttsService.markCurrentAsFavorited(messageId: msg.id, data: data)
+            }
             store.favorite(messageId: msg.id, audioData: audioData)
         }
     }
@@ -139,7 +145,8 @@ final class ChatViewModel: ObservableObject {
         )
         let ttsConfig = TTSConfig(
             enabled: isGal && settings.ttsEnabled,
-            baseURL: settings.ttsBaseURL
+            baseURL: settings.ttsBaseURL,
+            character: settings.ttsCharacter
         )
         let conversationId = store.activeId
 
