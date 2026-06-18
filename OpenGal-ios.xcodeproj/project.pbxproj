@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		C94CDB8A2FE3A593004A9B64 /* Citadel in Frameworks */ = {isa = PBXBuildFile; productRef = C94CDB892FE3A593004A9B64 /* Citadel */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		C93A983B2FE17946006A28C9 /* OpenGal.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenGal.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -36,6 +40,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C94CDB8A2FE3A593004A9B64 /* Citadel in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -78,6 +83,7 @@
 			);
 			name = "OpenGal-ios";
 			packageProductDependencies = (
+				C94CDB892FE3A593004A9B64 /* Citadel */,
 			);
 			productName = "OpenGal-ios";
 			productReference = C93A983B2FE17946006A28C9 /* OpenGal.app */;
@@ -107,6 +113,9 @@
 			);
 			mainGroup = C93A98322FE17946006A28C9;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				C94CDB882FE3A593004A9B64 /* XCRemoteSwiftPackageReference "Citadel" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = C93A983C2FE17946006A28C9 /* Products */;
 			projectDirPath = "";
@@ -341,6 +350,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		C94CDB882FE3A593004A9B64 /* XCRemoteSwiftPackageReference "Citadel" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/orlandos-nl/Citadel";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.12.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		C94CDB892FE3A593004A9B64 /* Citadel */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C94CDB882FE3A593004A9B64 /* XCRemoteSwiftPackageReference "Citadel" */;
+			productName = Citadel;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = C93A98332FE17946006A28C9 /* Project object */;
 }

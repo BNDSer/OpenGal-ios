@@ -4,6 +4,7 @@ struct SidebarView: View {
     @ObservedObject var store: ConversationStore
     @Binding var showFavorites: Bool
     var onNewChat: () -> Void
+    var onCode: () -> Void
     var onSelect: (UUID) -> Void
 
     private func haptic() { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
@@ -22,6 +23,9 @@ struct SidebarView: View {
             List {
                 Section {
                     sidebarRow(icon: "plus.bubble", label: "新建对话") { haptic(); onNewChat() }
+                    sidebarRow(icon: "terminal", label: "Code", iconColor: .green) {
+                        haptic(); onCode()
+                    }
                     sidebarRow(icon: "star.fill", label: "收藏夹", iconColor: .yellow) {
                         haptic(); showFavorites = true
                     }

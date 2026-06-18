@@ -19,6 +19,7 @@ struct ChatView: View {
     @State private var showSettings = false
     @State private var showSidebar = false
     @State private var showFavorites = false
+    @State private var showCode = false
     @State private var inputBarHeight: CGFloat = 80
 
     // Attachment state — lives here so + button can be in toolbar
@@ -94,6 +95,10 @@ struct ChatView: View {
                         store.newConversation()
                         closeSidebar()
                     },
+                    onCode: {
+                        closeSidebar()
+                        showCode = true
+                    },
                     onSelect: { id in
                         store.select(id)
                         closeSidebar()
@@ -126,6 +131,9 @@ struct ChatView: View {
                         }
                     }
             }
+        }
+        .fullScreenCover(isPresented: $showCode) {
+            CodeEntryView()
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItems,
                       maxSelectionCount: 5, matching: .images)
