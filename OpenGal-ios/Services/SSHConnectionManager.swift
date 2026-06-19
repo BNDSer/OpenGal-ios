@@ -166,29 +166,35 @@ final class SSHConnectionManager {
         return files
     }
 
-    // Read first user message text from a Claude Code JSONL session file
+    // Read last user message text from a Claude Code JSONL session file (matches desktop /resume display)
     func sessionPreview(filePath: String, on server: SSHServer) async throws -> String {
-        let raw = try await exec("head -20 \"\(filePath)\" 2>/dev/null || echo ''", on: server)
+        // tail to get recent entries — last user message is what desktop shows
+        let raw = try await exec("tail -50 \"\(filePath)\" 2>/dev/null || echo ''", on: server)
+        var lastUserText = ""
         for line in raw.components(separatedBy: "\n") {
             guard let data = line.data(using: .utf8),
                   let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
-            // Skip non-user and meta entries
             guard obj["type"] as? String == "user",
                   obj["isMeta"] as? Bool != true else { continue }
-            // Format: {"type":"user","message":{"role":"user","content":"text"}}
             if let msg = obj["message"] as? [String: Any] {
-                if let content = msg["content"] as? String, !content.isEmpty,
-                   !content.hasPrefix("<local-command") {
-                    return String(content.prefix(80))
-                }
-                if let contentArr = msg["content"] as? [[String: Any]],
-                   let first = contentArr.first(where: { ($0["type"] as? String) == "text" }),
-                   let text = first["text"] as? String {
-                    return String(text.prefix(80))
-                }
+                let text: String
+                if let content = msg["content"] as? String {
+                    text = content.trimmingCharacters(in: .whitespacesAndNewlines)
+                } else if let contentArr = msg["content"] as? [[String: Any]],
+                          let first = contentArr.first(where: { ($0["type"] as? String) == "text" }),
+                          let t = first["text"] as? String {
+                    text = t.trimmingCharacters(in: .whitespacesAndNewlines)
+                } else { continue }
+
+                // Skip system/meta content
+                if text.isEmpty { continue }
+                if text.hasPrefix("<local-command") || text.hasPrefix("<command-") { continue }
+                if text.hasPrefix("/exit") || text.hasPrefix("/clear") || text.hasPrefix("/quit") { continue }
+                if text == "\u{200B}" { continue }  // sentinel init message
+                lastUserText = String(text.prefix(80))
             }
         }
-        return ""
+        return lastUserText
     }
 
     // Get the most recently modified session ID for a project (used when attaching to existing session)
@@ -225,7 +231,8 @@ final class SSHConnectionManager {
                 if !content.isEmpty,
                    !content.hasPrefix("<local-command"),
                    !content.hasPrefix("<command-name>"),
-                   !content.hasPrefix("<command-") {
+                   !content.hasPrefix("<command-"),
+                   content != "\u{200B}" {  // filter sentinel init message
                     messages.append(CodeMessage(role: .user, content: content))
                 }
             }
@@ -302,6 +309,62 @@ final class SSHConnectionManager {
     }
 
     // MARK: - Streaming Claude call
+
+    // Create a new cli-mode session visible in desktop /resume list.
+    // Starts claude interactively via tmux (entrypoint="cli"), waits for it to write
+    // the session file, then returns the new session ID.
+    func createCliSession(projectPath: String, on server: SSHServer) async throws -> String? {
+        let expanded = try await expandPath(projectPath, on: server)
+        let encoded = encodeProjectPath(projectPath)
+        let tmuxName = "claude-init-\(UInt32.random(in: 10000...99999))"
+
+        let claudeSearch = "command -v claude || ls $HOME/.local/bin/claude /opt/homebrew/bin/claude /usr/local/bin/claude 2>/dev/null | head -1"
+        let claudeFound = ((try? await exec(claudeSearch, on: server)) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let claudeBin = claudeFound.isEmpty ? "claude" : claudeFound
+
+        let shellFound = ((try? await exec("echo $SHELL", on: server)) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let loginShell = shellFound.isEmpty ? "/bin/zsh" : shellFound
+
+        // Snapshot existing session files
+        let beforeRaw = (try? await exec(
+            "ls -1t $(echo ~)/.claude/projects/\(encoded)/ 2>/dev/null | grep '\\.jsonl$'",
+            on: server)) ?? ""
+        let before = Set(beforeRaw.components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { $0.hasSuffix(".jsonl") })
+
+        // Use envPath prefix so tmux/claude are found without hardcoding paths
+        let startCmd = "\(envPath) tmux new-session -d -s \(tmuxName) -c '\(expanded)' '\(loginShell) -l -c \"\(envPath) \(claudeBin)\"'"
+        _ = try? await exec(startCmd, on: server)
+
+        // Wait for claude to start (3s), send Enter to dismiss any first-run/trust prompt
+        try await Task.sleep(nanoseconds: 3_000_000_000)
+        _ = try? await exec("\(envPath) tmux send-keys -t \(tmuxName) '' Enter 2>/dev/null", on: server)
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+
+        // Send a sentinel message so claude writes the session file with entrypoint="cli".
+        // We use a zero-width space as content — it's invisible and easily filtered.
+        _ = try? await exec("\(envPath) tmux send-keys -t \(tmuxName) '\u{200B}' Enter 2>/dev/null", on: server)
+        try await Task.sleep(nanoseconds: 3_000_000_000)
+
+        // Kill session — claude has written the file by now
+        _ = try? await exec("\(envPath) tmux kill-session -t \(tmuxName) 2>/dev/null", on: server)
+
+        // Find new session file (ls -1t = newest first, pick first not in before)
+        let afterRaw = (try? await exec(
+            "ls -1t $(echo ~)/.claude/projects/\(encoded)/ 2>/dev/null | grep '\\.jsonl$'",
+            on: server)) ?? ""
+        let afterOrdered = afterRaw.components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { $0.hasSuffix(".jsonl") }
+
+        let newFile = afterOrdered.first(where: { !before.contains($0) }) ?? afterOrdered.first
+        print("[SSH] createCliSession before=\(before.count) after=\(afterOrdered.count) newFile=\(newFile ?? "nil")")
+        guard let filename = newFile else { return nil }
+        return URL(fileURLWithPath: filename).deletingPathExtension().lastPathComponent
+    }
 
     enum ClaudeStreamEvent {
         case text(String)

@@ -40,15 +40,17 @@ final class CodeViewModel: ObservableObject {
 
     let server: SSHServer
     let projectPath: String
+    let isNewSession: Bool
     // The active session ID — persists across messages in the same conversation
     private(set) var sessionId: String?
 
     private var streamTask: Task<Void, Never>?
     private let ssh = SSHConnectionManager.shared
 
-    init(server: SSHServer, projectPath: String, sessionFile: String? = nil) {
+    init(server: SSHServer, projectPath: String, sessionFile: String? = nil, isNewSession: Bool = false) {
         self.server = server
         self.projectPath = projectPath
+        self.isNewSession = isNewSession
         self.sessionId = sessionFile
     }
 
@@ -60,14 +62,21 @@ final class CodeViewModel: ObservableObject {
         messages = []
         Task {
             do {
-                // Load history for the active session
-                if sessionId == nil {
-                    sessionId = try? await ssh.latestSessionId(projectPath: projectPath, on: server)
-                }
-                if let sid = sessionId {
-                    let history = try await ssh.loadSessionHistory(
-                        projectPath: projectPath, sessionId: sid, on: server)
-                    messages = history
+                if isNewSession {
+                    // Create a cli-mode session so it appears in /resume on desktop
+                    print("[VM] createCliSession start")
+                    let newSid = try? await ssh.createCliSession(projectPath: projectPath, on: server)
+                    print("[VM] createCliSession result: \(newSid ?? "nil")")
+                    sessionId = newSid
+                } else {
+                    if sessionId == nil {
+                        sessionId = try? await ssh.latestSessionId(projectPath: projectPath, on: server)
+                    }
+                    if let sid = sessionId {
+                        let history = try await ssh.loadSessionHistory(
+                            projectPath: projectPath, sessionId: sid, on: server)
+                        messages = history
+                    }
                 }
                 isConnecting = false
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()

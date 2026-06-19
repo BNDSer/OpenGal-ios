@@ -6,11 +6,12 @@ struct CodeChatView: View {
     @State private var scrollTrigger = false
     @State private var inputBarHeight: CGFloat = 100
 
-    init(server: SSHServer, projectPath: String, sessionFile: String?) {
+    init(server: SSHServer, projectPath: String, sessionFile: String?, isNewSession: Bool = false) {
         _vm = StateObject(wrappedValue: CodeViewModel(
             server: server,
             projectPath: projectPath,
-            sessionFile: sessionFile
+            sessionFile: sessionFile,
+            isNewSession: isNewSession
         ))
     }
 

@@ -39,7 +39,8 @@ struct SessionListView: View {
                 NavigationLink(destination: CodeChatView(
                     server: server,
                     projectPath: projectPath,
-                    sessionFile: nil)) {
+                    sessionFile: nil,
+                    isNewSession: true)) {
                     HStack(spacing: 12) {
                         Image(systemName: "plus.circle.fill")
                             .font(.title3).foregroundStyle(.green)
