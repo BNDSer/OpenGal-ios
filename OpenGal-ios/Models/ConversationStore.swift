@@ -77,6 +77,15 @@ final class ConversationStore: ObservableObject {
         objectWillChange.send()
     }
 
+    // Reset streaming placeholder content for retry
+    func resetStreamingMessage(id messageId: UUID) {
+        guard let ci = conversations.firstIndex(where: { $0.id == activeId }),
+              let mi = conversations[ci].messages.firstIndex(where: { $0.id == messageId }) else { return }
+        conversations[ci].messages[mi].content = ""
+        conversations[ci].messages[mi].isStreaming = true
+        objectWillChange.send()
+    }
+
     // Mark streaming done, persist
     func finalizeStreamingMessage(id messageId: UUID, content: String) {
         guard let ci = conversations.firstIndex(where: { $0.id == activeId }),

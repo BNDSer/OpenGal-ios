@@ -157,45 +157,82 @@ final class ChatViewModel: ObservableObject {
 
         do {
             var isFirstChunk = true
-            let reply = try await AnthropicService.shared.streamMessage(
-                messages: messages.filter { $0.id != msgId }, // exclude placeholder
-                config: config,
-                onDelta: { [weak self] chunk in
-                    guard let self else { return }
-                    Task { @MainActor in
-                        if isFirstChunk {
-                            isFirstChunk = false
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            var lastError: Error? = nil
+
+            for attempt in 0..<3 {
+                if attempt > 0 {
+                    try await Task.sleep(nanoseconds: UInt64(attempt) * 1_000_000_000)
+                    store.resetStreamingMessage(id: msgId)
+                    isFirstChunk = true
+                }
+                do {
+                    let reply = try await AnthropicService.shared.streamMessage(
+                        messages: messages.filter { $0.id != msgId },
+                        config: config,
+                        onDelta: { [weak self] chunk in
+                            guard let self else { return }
+                            Task { @MainActor in
+                                if isFirstChunk {
+                                    isFirstChunk = false
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                }
+                                self.store.appendStreamingChunk(chunk, to: msgId)
+                            }
                         }
-                        self.store.appendStreamingChunk(chunk, to: msgId)
+                    )
+
+                    // Success — finalize and break
+                    store.finalizeStreamingMessage(id: msgId, content: reply)
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+
+                    if let convId = conversationId,
+                       store.conversations.first(where: { $0.id == convId })?.title == "新对话",
+                       messages.filter({ $0.role == .assistant && !$0.isStreaming }).count == 1 {
+                        Task { await generateTitle(for: convId, config: config) }
                     }
-                }
-            )
 
-            // Finalize
-            store.finalizeStreamingMessage(id: msgId, content: reply)
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-
-            // Generate title
-            if let convId = conversationId,
-               store.conversations.first(where: { $0.id == convId })?.title == "新对话",
-               messages.filter({ $0.role == .assistant && !$0.isStreaming }).count == 1 {
-                Task { await generateTitle(for: convId, config: config) }
-            }
-
-            if ttsConfig.enabled {
-                Task {
-                    guard let data = await ttsService.fetchAudio(text: reply, config: ttsConfig) else { return }
-                    pendingAudioData[msgId] = data
-                    ttsService.play(data: data, messageId: msgId, keepFile: false)
+                    if ttsConfig.enabled {
+                        Task {
+                            guard let data = await ttsService.fetchAudio(text: reply, config: ttsConfig) else { return }
+                            pendingAudioData[msgId] = data
+                            ttsService.play(data: data, messageId: msgId, keepFile: false)
+                        }
+                    }
+                    return
+                } catch {
+                    if isCancellation(error) {
+                        store.removeMessage(id: msgId)
+                        return
+                    }
+                    lastError = error
+                    // Retry on 503 or network errors; give up on other errors immediately
+                    if !isRetryable(error) { break }
                 }
             }
+
+            // All attempts failed
+            store.removeMessage(id: msgId)
+            errorMessage = lastError?.localizedDescription
         } catch {
-            // Remove placeholder on error/cancel
             store.removeMessage(id: msgId)
             if isCancellation(error) { return }
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func isRetryable(_ error: Error) -> Bool {
+        // 503 service unavailable
+        if case AnthropicError.httpError(let code, _) = error, code == 503 || code == 502 || code == 529 {
+            return true
+        }
+        // TLS / network errors
+        if case AnthropicError.networkError(let inner) = error {
+            let ns = inner as NSError
+            if ns.domain == NSURLErrorDomain { return true }
+        }
+        let ns = error as NSError
+        if ns.domain == NSURLErrorDomain { return true }
+        return false
     }
 
     private func isCancellation(_ error: Error) -> Bool {

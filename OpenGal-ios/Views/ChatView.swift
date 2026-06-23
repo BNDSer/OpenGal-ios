@@ -374,7 +374,7 @@ struct ChatView: View {
 
     // MARK: - File loaders
 
-    private static let maxImageBytes = 4_500_000  // conservative: ~4.5MB decoded
+    private static let maxImageBytes = 3_700_000  // base64 adds ~33%; 3.7MB * 1.33 ≈ 4.9MB, safely under API 5MB limit
 
     private func loadPhoto(_ item: PhotosPickerItem) async {
         guard let data = try? await item.loadTransferable(type: Data.self) else { return }
