@@ -141,7 +141,8 @@ final class ChatViewModel: ObservableObject {
             maxTokens: settings.maxTokens,
             thinkingEnabled: settings.thinkingEnabled,
             thinkingBudget: settings.thinkingBudget,
-            timeoutSeconds: settings.timeoutSeconds
+            timeoutSeconds: settings.timeoutSeconds,
+            provider: settings.apiProvider
         )
         let ttsConfig = TTSConfig(
             enabled: isGal && settings.ttsEnabled,
@@ -270,7 +271,8 @@ final class ChatViewModel: ObservableObject {
             maxTokens: 64,
             thinkingEnabled: false,
             thinkingBudget: 0,
-            timeoutSeconds: 30
+            timeoutSeconds: 30,
+            provider: config.provider
         )
         let titleMessages = [ChatMessage(role: .user, content: prompt)]
 

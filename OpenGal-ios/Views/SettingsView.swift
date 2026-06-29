@@ -13,11 +13,20 @@ struct SettingsView: View {
     }
 
     // Common model presets
-    private let modelPresets = [        "claude-sonnet-4-6",
+    private let anthropicPresets = [
+        "claude-sonnet-4-6",
         "claude-opus-4-5",
         "claude-haiku-4-5-20251001",
         "claude-sonnet-4-5",
     ]
+    private let openaiPresets = [
+        "qwen2.5:7b-instruct-q8_0",
+        "hf.co/QuantFactory/Qwen2.5-7B-Instruct-Uncensored-GGUF:Q5_K_M",
+        "llama3.2:latest",
+    ]
+    private var modelPresets: [String] {
+        settings.apiProvider == "openai" ? openaiPresets : anthropicPresets
+    }
 
     var body: some View {
         Form {
@@ -31,6 +40,11 @@ struct SettingsView: View {
             }
 
             Section("API 配置") {
+                Picker("接口格式", selection: $settings.apiProvider) {
+                    Text("Anthropic").tag("anthropic")
+                    Text("OpenAI").tag("openai")
+                }
+                .pickerStyle(.segmented)
                 LabeledContent("Base URL") {
                     TextField("https://...", text: $settings.baseURL)
                         .multilineTextAlignment(.trailing)
