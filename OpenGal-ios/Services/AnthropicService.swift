@@ -29,6 +29,7 @@ struct AnthropicConfig: Sendable {
     let thinkingBudget: Int
     let timeoutSeconds: Int
     let provider: String   // "anthropic" or "openai"
+    let numCtx: Int        // Ollama num_ctx, 0 = omit
 }
 
 final class AnthropicService: Sendable {
@@ -211,12 +212,15 @@ final class AnthropicService: Sendable {
             }
         }
 
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "model": config.model.isEmpty ? "qwen2.5:7b-instruct-q8_0" : config.model,
             "messages": oaiMessages,
             "max_tokens": config.maxTokens,
             "stream": true
         ]
+        if config.numCtx > 0 {
+            body["options"] = ["num_ctx": config.numCtx]
+        }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"

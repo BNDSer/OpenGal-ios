@@ -136,13 +136,14 @@ final class ChatViewModel: ObservableObject {
             baseURL: settings.baseURL,
             apiKey: settings.apiKey,
             model: settings.model,
-            systemPrompt: isGal ? settings.systemPrompt : "",
+            systemPrompt: isGal ? settings.systemPrompt : settings.normalSystemPrompt,
             maxHistoryMessages: settings.maxHistoryMessages,
             maxTokens: settings.maxTokens,
             thinkingEnabled: settings.thinkingEnabled,
             thinkingBudget: settings.thinkingBudget,
             timeoutSeconds: settings.timeoutSeconds,
-            provider: settings.apiProvider
+            provider: settings.apiProvider,
+            numCtx: settings.numCtx
         )
         let ttsConfig = TTSConfig(
             enabled: isGal && settings.ttsEnabled,
@@ -272,7 +273,8 @@ final class ChatViewModel: ObservableObject {
             thinkingEnabled: false,
             thinkingBudget: 0,
             timeoutSeconds: 30,
-            provider: config.provider
+            provider: config.provider,
+            numCtx: 0
         )
         let titleMessages = [ChatMessage(role: .user, content: prompt)]
 

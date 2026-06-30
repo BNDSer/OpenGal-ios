@@ -32,6 +32,38 @@ final class AppSettings: ObservableObject {
             defaults.set(model, forKey: "model_\(apiProvider)")
         }
     }
+    // Normal mode system prompt slots (0-4), index -1 = off
+    @Published var normalPromptIndex: Int {
+        didSet { defaults.set(normalPromptIndex, forKey: "normalPromptIndex") }
+    }
+    @Published var normalPrompt0: String {
+        didSet { defaults.set(normalPrompt0, forKey: "normalPrompt0") }
+    }
+    @Published var normalPrompt1: String {
+        didSet { defaults.set(normalPrompt1, forKey: "normalPrompt1") }
+    }
+    @Published var normalPrompt2: String {
+        didSet { defaults.set(normalPrompt2, forKey: "normalPrompt2") }
+    }
+    @Published var normalPrompt3: String {
+        didSet { defaults.set(normalPrompt3, forKey: "normalPrompt3") }
+    }
+    @Published var normalPrompt4: String {
+        didSet { defaults.set(normalPrompt4, forKey: "normalPrompt4") }
+    }
+
+    var normalSystemPrompt: String {
+        guard normalPromptIndex >= 0 else { return "" }
+        switch normalPromptIndex {
+        case 0: return normalPrompt0
+        case 1: return normalPrompt1
+        case 2: return normalPrompt2
+        case 3: return normalPrompt3
+        case 4: return normalPrompt4
+        default: return ""
+        }
+    }
+
     @Published var systemPromptYanami: String {
         didSet { defaults.set(systemPromptYanami, forKey: "systemPromptYanami") }
     }
@@ -72,6 +104,9 @@ final class AppSettings: ObservableObject {
     }
     @Published var timeoutSeconds: Int {
         didSet { defaults.set(timeoutSeconds, forKey: "timeoutSeconds") }
+    }
+    @Published var numCtx: Int {   // Ollama context length, 0 = don't send
+        didSet { defaults.set(numCtx, forKey: "numCtx") }
     }
     @Published var colorScheme: String {   // "system", "light", "dark"
         didSet { defaults.set(colorScheme, forKey: "colorScheme") }
@@ -121,6 +156,13 @@ final class AppSettings: ObservableObject {
         thinkingEnabled = defaults.object(forKey: "thinkingEnabled") as? Bool ?? false
         thinkingBudget = defaults.object(forKey: "thinkingBudget") as? Int ?? 8000
         timeoutSeconds = defaults.object(forKey: "timeoutSeconds") as? Int ?? 120
+        numCtx = defaults.object(forKey: "numCtx") as? Int ?? 8192
+        normalPromptIndex = defaults.object(forKey: "normalPromptIndex") as? Int ?? -1
+        normalPrompt0 = defaults.string(forKey: "normalPrompt0") ?? ""
+        normalPrompt1 = defaults.string(forKey: "normalPrompt1") ?? ""
+        normalPrompt2 = defaults.string(forKey: "normalPrompt2") ?? ""
+        normalPrompt3 = defaults.string(forKey: "normalPrompt3") ?? ""
+        normalPrompt4 = defaults.string(forKey: "normalPrompt4") ?? ""
         colorScheme = defaults.string(forKey: "colorScheme") ?? "system"
         ttsBaseURL = defaults.string(forKey: "ttsBaseURL") ?? "http://100.75.53.37:9880"
         ttsEnabled = defaults.object(forKey: "ttsEnabled") as? Bool ?? false

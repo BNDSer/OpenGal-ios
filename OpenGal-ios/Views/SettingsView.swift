@@ -12,6 +12,17 @@ struct SettingsView: View {
         }
     }
 
+    private var normalPromptBinding: Binding<String> {
+        switch settings.normalPromptIndex {
+        case 0: return $settings.normalPrompt0
+        case 1: return $settings.normalPrompt1
+        case 2: return $settings.normalPrompt2
+        case 3: return $settings.normalPrompt3
+        case 4: return $settings.normalPrompt4
+        default: return .constant("")
+        }
+    }
+
     // Common model presets
     private let anthropicPresets = [
         "claude-sonnet-4-6",
@@ -94,6 +105,17 @@ struct SettingsView: View {
                         in: 15...600,
                         step: 15)
 
+                if settings.apiProvider == "openai" {
+                    Picker("上下文长度 (num_ctx)", selection: $settings.numCtx) {
+                        Text("4K").tag(4096)
+                        Text("8K").tag(8192)
+                        Text("16K").tag(16384)
+                        Text("32K").tag(32768)
+                        Text("64K").tag(65536)
+                        Text("128K").tag(131072)
+                    }
+                }
+
                 Toggle("Extended Thinking", isOn: Binding(
                     get: { settings.thinkingEnabled },
                     set: { enabled in
@@ -130,6 +152,32 @@ struct SettingsView: View {
                         value: $settings.maxHistoryMessages,
                         in: 2...100,
                         step: 2)
+            }
+
+            Section {
+                Picker("预设", selection: $settings.normalPromptIndex) {
+                    Text("关闭").tag(-1)
+                    Text("1").tag(0)
+                    Text("2").tag(1)
+                    Text("3").tag(2)
+                    Text("4").tag(3)
+                    Text("5").tag(4)
+                }
+                .pickerStyle(.segmented)
+                if settings.normalPromptIndex >= 0 {
+                    VStack(alignment: .leading, spacing: 4) {
+                        TextEditor(text: normalPromptBinding)
+                            .frame(minHeight: 80)
+                            .font(.body)
+                            .id(settings.normalPromptIndex)
+                    }
+                    .padding(.vertical, 4)
+                }
+            } header: {
+                Text("普通模式 — 系统提示词")
+            } footer: {
+                Text(settings.normalPromptIndex < 0 ? "已关闭，不发送系统提示词" : "对所有非 Gal 对话生效，Anthropic 和 OpenAI 模式均适用")
+                    .foregroundStyle(.secondary)
             }
 
             Section {

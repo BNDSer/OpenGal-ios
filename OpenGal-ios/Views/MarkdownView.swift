@@ -92,7 +92,7 @@ private struct MarkdownWebView: UIViewRepresentable {
 
     /// Convert markdown subset to HTML. Preserves $ so KaTeX can find them.
     private func renderMarkdown(_ md: String) -> String {
-        var lines = md.components(separatedBy: "\n")
+        let lines = md.components(separatedBy: "\n")
         var out: [String] = []
         var i = 0
         while i < lines.count {
@@ -101,7 +101,7 @@ private struct MarkdownWebView: UIViewRepresentable {
 
             // Fenced code block
             if t.hasPrefix("```") {
-                let lang = String(t.dropFirst(3))
+                let _ = String(t.dropFirst(3))
                 var code = ""
                 i += 1
                 while i < lines.count && !lines[i].trimmingCharacters(in: .whitespaces).hasPrefix("```") {

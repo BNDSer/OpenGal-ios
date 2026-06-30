@@ -140,7 +140,7 @@ final class CodeViewModel: ObservableObject {
         isStreaming = true
 
         // Start or append to assistant message
-        let assistantMsgId = UUID()
+        let _ = UUID()
         messages.append(CodeMessage(
             role: .assistant, content: "", isStreaming: true))
         let idx = messages.count - 1
