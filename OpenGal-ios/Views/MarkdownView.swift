@@ -4,6 +4,12 @@ import WebKit
 /// Full markdown + LaTeX renderer using a single WKWebView.
 /// Handles: bold, italic, inline code, $...$ inline math, $$...$$ display math.
 /// No CDN dependency for markdown — only KaTeX is loaded from CDN.
+// Shared flag: true when user's touch is over a horizontally scrollable web element
+final class WebScrollState {
+    static let shared = WebScrollState()
+    var isOverScrollable = false
+}
+
 struct MarkdownView: View {
     let text: String
     @State private var height: CGFloat = 28
@@ -25,6 +31,7 @@ private struct MarkdownWebView: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         let cfg = WKWebViewConfiguration()
         cfg.userContentController.add(context.coordinator, name: "h")
+        cfg.userContentController.add(context.coordinator, name: "scroll")
         let wv = WKWebView(frame: .zero, configuration: cfg)
         wv.isOpaque = false
         wv.backgroundColor = .clear
@@ -85,6 +92,20 @@ private struct MarkdownWebView: UIViewRepresentable {
           window.webkit.messageHandlers.h.postMessage(h);
         }
         setTimeout(report,2000);
+        // Notify Swift when touch is over a horizontally scrollable element
+        document.addEventListener('touchstart', function(e) {
+          var el = e.target;
+          var over = false;
+          while (el && el !== document.body) {
+            var style = window.getComputedStyle(el);
+            var ox = style.overflowX;
+            if ((ox === 'auto' || ox === 'scroll') && el.scrollWidth > el.clientWidth) {
+              over = true; break;
+            }
+            el = el.parentElement;
+          }
+          window.webkit.messageHandlers.scroll.postMessage(over);
+        }, {passive: true});
         </script>
         </html>
         """
@@ -209,10 +230,17 @@ private struct MarkdownWebView: UIViewRepresentable {
         var parent: MarkdownWebView
         var lastText = ""
         weak var webView: WKWebView?
+        var isOverScrollable = false
 
         init(_ p: MarkdownWebView) { parent = p }
 
         func userContentController(_ uc: WKUserContentController, didReceive message: WKScriptMessage) {
+            if message.name == "scroll" {
+                let over = (message.body as? Bool) ?? false
+                isOverScrollable = over
+                WebScrollState.shared.isOverScrollable = over
+                return
+            }
             guard let v = message.body as? NSNumber else { return }
             let h = CGFloat(v.doubleValue)
             guard h > 4 else { return }

@@ -18,6 +18,7 @@ struct ChatView: View {
 
     @State private var showSettings = false
     @State private var showSidebar = false
+    @State private var dragOffset: CGFloat = 0
     @State private var showFavorites = false
     @State private var showCode = false
     @State private var inputBarHeight: CGFloat = 80
@@ -33,95 +34,117 @@ struct ChatView: View {
     @State private var scrollToBottomTrigger = false
 
     var body: some View {
-        GeometryReader { geo in
-            let sidebarWidth = min(300, geo.size.width * 0.80)
+        // slideAmount: how far main panel moves right. Screen width - this = visible sliver.
+        // sidebarWidth matches the sliver so sidebar content aligns perfectly.
+        let screenWidth = UIScreen.main.bounds.width
+        let slideAmount: CGFloat = screenWidth * 0.72
+        let sidebarWidth: CGFloat = slideAmount
 
-            ZStack(alignment: .leading) {
-                // ── Main ──
-                NavigationStack {
-                    ZStack(alignment: .bottom) {
-                        messageList
-                            .overlay(alignment: .bottom) { inputBarArea }
+        // Live offset: base + finger drag, clamped to [0, slideAmount]
+        let currentOffset: CGFloat = (showSidebar ? slideAmount : 0) + dragOffset
+        let clampedOffset = max(0, min(slideAmount, currentOffset))
+        let progress = clampedOffset / slideAmount  // 0 = closed, 1 = open
 
-                        // Attachment menu floats above input bar
-                        if showAttachmentMenu {
-                            attachmentMenu
-                                .padding(.bottom, inputBarHeight + 8)
-                                .padding(.horizontal, 12)
-                                .transition(.move(edge: .bottom).combined(with: .opacity))
-                                .zIndex(5)
-                        }
-                    }
-                    .navigationTitle(store.active?.title ?? "OpenGal")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar { toolbarContent }
-                    .navigationDestination(isPresented: $showSettings) {
-                        SettingsView()
-                    }
-                }
-                .simultaneousGesture(
-                    DragGesture(minimumDistance: 20)
-                        .onEnded { v in
-                            if v.translation.width > 60 && v.startLocation.x < geo.size.width / 3 && !showSidebar {
-                                dismissKeyboard()
-                                withAnimation(.spring(duration: 0.3)) { showSidebar = true }
-                            } else if v.translation.width < -60 && showSidebar {
-                                closeSidebar()
-                            }
-                        }
-                )
-                // Close attachment menu when tapping outside
-                .simultaneousGesture(
-                    TapGesture().onEnded {
-                        if showAttachmentMenu {
-                            withAnimation(.spring(duration: 0.25)) { showAttachmentMenu = false }
-                        }
-                    }
-                )
+        ZStack(alignment: .leading) {
+            // Bottom layer: sidebar, fixed width = slideAmount so it aligns with revealed area
+            SidebarView(
+                store: store,
+                showFavorites: $showFavorites,
+                onNewChat: { store.newConversation(); closeSidebar() },
+                onCode: { closeSidebar(); showCode = true },
+                onSelect: { id in store.select(id); closeSidebar() }
+            )
+            .frame(width: sidebarWidth)
+            .background(Color(.systemBackground))
+            .ignoresSafeArea()
 
-                // ── Scrim ──
-                if showSidebar {
-                    Color.black.opacity(0.4)
-                        .ignoresSafeArea()
-                        .onTapGesture { closeSidebar() }
-                        .zIndex(10)
-                }
-
-                // ── Sidebar ──
-                SidebarView(
-                    store: store,
-                    showFavorites: $showFavorites,
-                    onNewChat: {
-                        store.newConversation()
-                        closeSidebar()
-                    },
-                    onCode: {
-                        closeSidebar()
-                        showCode = true
-                    },
-                    onSelect: { id in
-                        store.select(id)
-                        closeSidebar()
-                    }
-                )
-                .frame(width: sidebarWidth)
-                .background(Color(.systemBackground))
-                .clipShape(
-                    UnevenRoundedRectangle(
-                        topLeadingRadius: 0,
-                        bottomLeadingRadius: 0,
-                        bottomTrailingRadius: 62,
-                        topTrailingRadius: 62,
-                        style: .continuous
-                    )
-                )
-                .shadow(color: .black.opacity(0.15), radius: 24, x: 12, y: 0)
-                .ignoresSafeArea()
-                .offset(x: showSidebar ? 0 : -(sidebarWidth + 20))
-                .animation(.spring(duration: 0.3), value: showSidebar)
-                .zIndex(11)
+            // Top layer: NavigationStack slides right. Settings push inside is unaffected.
+            NavigationStack {
+                mainChatView
             }
+            .clipShape(
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 62 * progress,   // left corners get the radius
+                    bottomLeadingRadius: 62 * progress,
+                    bottomTrailingRadius: 0,
+                    topTrailingRadius: 0,
+                    style: .continuous
+                )
+            )
+            .shadow(color: .black.opacity(0.2 * progress), radius: 20, x: -4, y: 0)
+            .offset(x: clampedOffset)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 10, coordinateSpace: .global)
+                    .onChanged { v in
+                        let dx = v.translation.width
+                        let dy = v.translation.height
+                        guard abs(dx) > abs(dy) else { return }
+                        guard !showSettings else { return }
+                        guard !WebScrollState.shared.isOverScrollable else { return }
+                        if !showSidebar && dx > 0 {
+                            dragOffset = dx
+                        } else if showSidebar && dx < 0 {
+                            dragOffset = dx
+                        }
+                    }
+                    .onEnded { v in
+                        let dx = v.translation.width
+                        let dy = v.translation.height
+                        guard abs(dx) > abs(dy) else {
+                            withAnimation(.spring(duration: 0.3, bounce: 0.05)) { dragOffset = 0 }
+                            return
+                        }
+                        guard !showSettings else {
+                            withAnimation(.spring(duration: 0.3, bounce: 0.05)) { dragOffset = 0 }
+                            return
+                        }
+                        guard !WebScrollState.shared.isOverScrollable else {
+                            withAnimation(.spring(duration: 0.3, bounce: 0.05)) { dragOffset = 0 }
+                            return
+                        }
+                        let velocity = v.predictedEndTranslation.width - dx
+                        withAnimation(.spring(duration: 0.3, bounce: 0.05)) {
+                            if !showSidebar {
+                                showSidebar = dx + velocity > slideAmount * 0.3
+                            } else {
+                                showSidebar = !((-dx - velocity) > slideAmount * 0.3)
+                            }
+                            dragOffset = 0
+                        }
+                    }
+            )
+            .overlay {
+                if showSidebar {
+                    // Sliver on the right: tap or left-swipe to close sidebar
+                    HStack(spacing: 0) {
+                        Color.clear.frame(width: slideAmount)
+                        Color.black.opacity(0.01)
+                            .contentShape(Rectangle())
+                            .onTapGesture { closeSidebar() }
+                            .gesture(
+                                DragGesture(minimumDistance: 10)
+                                    .onChanged { v in
+                                        let dx = v.translation.width
+                                        let dy = v.translation.height
+                                        guard abs(dx) > abs(dy), dx < 0 else { return }
+                                        dragOffset = dx
+                                    }
+                                    .onEnded { v in
+                                        let dx = v.translation.width
+                                        let velocity = v.predictedEndTranslation.width - dx
+                                        withAnimation(.spring(duration: 0.3, bounce: 0.05)) {
+                                            showSidebar = !((-dx - velocity) > slideAmount * 0.3)
+                                            dragOffset = 0
+                                        }
+                                    }
+                            )
+                    }
+                    .ignoresSafeArea()
+                }
+            }
+            .zIndex(1)
         }
+        .ignoresSafeArea()
         .sheet(isPresented: $showFavorites) {
             NavigationStack {
                 FavoritesView(store: store)
@@ -169,6 +192,36 @@ struct ChatView: View {
 
     // MARK: - Attachment menu card
 
+    private var mainChatView: some View {
+        ZStack(alignment: .bottom) {
+            messageList
+                .overlay(alignment: .bottom) { inputBarArea }
+
+            if showAttachmentMenu {
+                attachmentMenu
+                    .padding(.bottom, inputBarHeight + 8)
+                    .padding(.horizontal, 12)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(5)
+            }
+        }
+        .navigationTitle(store.active?.title ?? "OpenGal")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar { toolbarContent }
+        .navigationDestination(isPresented: $showSettings) {
+            SettingsView()
+        }
+        .simultaneousGesture(
+            TapGesture().onEnded {
+                if showAttachmentMenu {
+                    withAnimation(.spring(duration: 0.25)) { showAttachmentMenu = false }
+                }
+            }
+        )
+    }
+
+    // MARK: - Attachment menu
+
     private var attachmentMenu: some View {
         VStack(spacing: 0) {
             menuRow(icon: "camera.fill", label: "相机") {
@@ -215,7 +268,10 @@ struct ChatView: View {
 
     private func closeSidebar() {
         dismissKeyboard()
-        withAnimation(.spring(duration: 0.3)) { showSidebar = false }
+        withAnimation(.spring(duration: 0.3, bounce: 0.05)) {
+            showSidebar = false
+            dragOffset = 0
+        }
     }
 
     // MARK: - Input bar
@@ -278,7 +334,10 @@ struct ChatView: View {
             Button(action: {
                 haptic()
                 dismissKeyboard()
-                withAnimation(.spring(duration: 0.3)) { showSidebar.toggle() }
+                withAnimation(.spring(duration: 0.3, bounce: 0.05)) {
+                    showSidebar.toggle()
+                    dragOffset = 0
+                }
             }) {
                 Image(systemName: "sidebar.left")
             }
